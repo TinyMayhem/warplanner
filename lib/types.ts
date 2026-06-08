@@ -43,10 +43,30 @@ export type WarRecord = {
   copperBefore: number;
   copperAfter: number;
   copperDelta: number;
+  plunderPercent: 0 | 3 | 6 | 9 | 12 | 15;
   result: "win" | "loss";
+  battleSummary: string;
   observedAttendance: number;
   observedActivity: number;
   notes: string;
+};
+
+export type FactionBattleDifficulty = "Easy" | "Medium" | "Difficult";
+
+export type FactionBattleRecord = {
+  id: string;
+  workspaceId: string;
+  weekOf: string;
+  factionAAllianceId: string;
+  factionAName: string;
+  factionBAllianceId: string;
+  factionBName: string;
+  winner: "A" | "B" | "Draw" | "Unknown";
+  difficulty: FactionBattleDifficulty;
+  battleSummary: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type WorkspaceRole = "Owner" | "Admin" | "Editor" | "Viewer";
@@ -77,4 +97,5 @@ export type PlannerState = {
   servers: Server[];
   alliances: Alliance[];
   warRecords: WarRecord[];
+  factionBattleRecords: FactionBattleRecord[];
 };
