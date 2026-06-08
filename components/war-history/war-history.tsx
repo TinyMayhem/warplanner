@@ -8,11 +8,24 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCompact, formatNumber } from "@/lib/calculations";
+import { currentCopperNow, formatCompact, formatNumber } from "@/lib/calculations";
 import { useWarPlannerStore } from "@/store/war-planner-store";
 import type { Alliance, WarRecord } from "@/lib/types";
 
 type WarFormState = Omit<WarRecord, "id" | "copperDelta" | "workspaceId">;
+const PLUNDER_OPTIONS: WarRecord["plunderPercent"][] = [0, 3, 6, 9, 12, 15];
+const BATTLE_SUMMARY_OPTIONS = [
+  "Clean win",
+  "Close win",
+  "Hard-fought win",
+  "Close loss",
+  "Heavy loss",
+  "Low turnout",
+  "Enemy low turnout",
+  "Enemy defended hard",
+  "Enemy barely defended",
+  "Scout / test hit"
+];
 
 export function WarHistory() {
   const activeWorkspaceId = useWarPlannerStore((state) => state.activeWorkspaceId);
@@ -93,9 +106,11 @@ export function WarHistory() {
                 <Th>Alliance</Th>
                 <Th>Opponent</Th>
                 <Th>Result</Th>
+                <Th>Plunder</Th>
                 <Th>Copper</Th>
                 <Th>Attendance</Th>
                 <Th>Activity</Th>
+                <Th>Battle</Th>
                 <Th>Notes</Th>
                 <Th>Actions</Th>
               </tr>
@@ -105,7 +120,7 @@ export function WarHistory() {
                 filteredRecords.map((record) =>
                   editingId === record.id ? (
                     <tr key={record.id} className="border-t border-command-700 bg-command-900/70">
-                      <td colSpan={9} className="p-4">
+                      <td colSpan={11} className="p-4">
                         <WarRecordForm alliances={alliances} record={record} onDone={() => setEditingId(null)} />
                       </td>
                     </tr>
@@ -121,7 +136,7 @@ export function WarHistory() {
                 )
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-zinc-400">
+                  <td colSpan={11} className="p-6 text-center text-zinc-400">
                     No war records match the current filters.
                   </td>
                 </tr>
@@ -147,6 +162,7 @@ export function WarHistory() {
 function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; record?: WarRecord; onDone?: () => void }) {
   const addWarRecord = useWarPlannerStore((state) => state.addWarRecord);
   const updateWarRecord = useWarPlannerStore((state) => state.updateWarRecord);
+  const updateAlliance = useWarPlannerStore((state) => state.updateAlliance);
   const firstAlliance = alliances[0];
   const defaultState: WarFormState = {
     allianceId: firstAlliance.id,
@@ -155,12 +171,16 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
     enemyAllianceName: "",
     copperBefore: 0,
     copperAfter: 0,
+    plunderPercent: 0,
     result: "win",
+    battleSummary: "",
     observedAttendance: 50,
     observedActivity: 5,
     notes: ""
   };
   const [form, setForm] = useState<WarFormState>(record ? stripRecordId(record) : defaultState);
+  const selectedEnemy = alliances.find((alliance) => alliance.id === form.enemyAllianceId);
+  const estimatedPlunder = selectedEnemy ? currentCopperNow(selectedEnemy) * (form.plunderPercent / 100) : 0;
 
   function update<K extends keyof WarFormState>(key: K, value: WarFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -173,7 +193,6 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const selectedEnemy = alliances.find((alliance) => alliance.id === form.enemyAllianceId);
     const normalized = {
       ...form,
       enemyAllianceId: form.enemyAllianceId || undefined,
@@ -186,12 +205,19 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
       setForm(defaultState);
     }
 
+    if (selectedEnemy) {
+      updateAlliance(selectedEnemy.id, {
+        activityRating: clampNumber(form.observedActivity, 1, 10),
+        attendanceSaturday: clampNumber(form.observedAttendance, 0, 100)
+      });
+    }
+
     onDone?.();
   }
 
   return (
     <form onSubmit={submit} className="grid gap-3">
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         <FieldLabel label="Our alliance">
           <Select value={form.allianceId} onChange={(event) => update("allianceId", event.target.value)}>
             {alliances.map((alliance) => (
@@ -206,7 +232,7 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
         </FieldLabel>
         <FieldLabel label="Enemy alliance">
           <Select value={form.enemyAllianceId ?? ""} onChange={(event) => update("enemyAllianceId", event.target.value)}>
-            <option value="">Manual / unknown</option>
+            <option value="">Select opponent</option>
             {alliances
               .filter((alliance) => alliance.id !== form.allianceId)
               .map((alliance) => (
@@ -216,12 +242,9 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
               ))}
           </Select>
         </FieldLabel>
-        <FieldLabel label="Manual enemy name">
-          <Input value={form.enemyAllianceName} placeholder="Opponent name" onChange={(event) => update("enemyAllianceName", event.target.value)} />
-        </FieldLabel>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <NumberField label="Copper before" value={form.copperBefore} onChange={(value) => update("copperBefore", value)} numberValue={numberValue} />
         <NumberField label="Copper after" value={form.copperAfter} onChange={(value) => update("copperAfter", value)} numberValue={numberValue} />
         <FieldLabel label="Result">
@@ -230,9 +253,34 @@ function WarRecordForm({ alliances, record, onDone }: { alliances: Alliance[]; r
             <option value="loss">Loss</option>
           </Select>
         </FieldLabel>
+        <FieldLabel label="Plunder round">
+          <Select value={form.plunderPercent.toString()} onChange={(event) => update("plunderPercent", Number(event.target.value) as WarRecord["plunderPercent"])}>
+            {PLUNDER_OPTIONS.map((percent) => (
+              <option key={percent} value={percent}>
+                {percent === 0 ? "No plunder" : `${percent}%`}
+              </option>
+            ))}
+          </Select>
+        </FieldLabel>
         <NumberField label="Observed attendance %" min={0} max={100} value={form.observedAttendance} onChange={(value) => update("observedAttendance", value)} numberValue={numberValue} />
         <NumberField label="Observed activity 1-10" min={1} max={10} value={form.observedActivity} onChange={(value) => update("observedActivity", value)} numberValue={numberValue} />
       </div>
+
+      <div className="rounded-md border border-command-700 bg-command-900 p-3 text-sm text-zinc-300">
+        Estimated enemy copper plunder: <span className="font-semibold text-command-amber">{formatCompact(estimatedPlunder)}</span>
+        {selectedEnemy ? ` from ${selectedEnemy.name}` : " once an enemy alliance is selected"}
+      </div>
+
+      <FieldLabel label="How the battle went">
+        <Select value={form.battleSummary} onChange={(event) => update("battleSummary", event.target.value)}>
+          <option value="">Select battle summary</option>
+          {BATTLE_SUMMARY_OPTIONS.map((summary) => (
+            <option key={summary} value={summary}>
+              {summary}
+            </option>
+          ))}
+        </Select>
+      </FieldLabel>
 
       <FieldLabel label="Notes">
         <Textarea value={form.notes} placeholder="War notes, timing, target behavior, or tactical observations" onChange={(event) => update("notes", event.target.value)} />
@@ -269,6 +317,9 @@ function WarRecordRow({ record, alliance, onEdit, onDelete }: { record: WarRecor
         <Badge tone={record.result === "win" ? "green" : "red"}>{record.result}</Badge>
       </Td>
       <Td>
+        <p className="font-semibold text-command-amber">{record.plunderPercent}%</p>
+      </Td>
+      <Td>
         <p className={deltaTone}>{formatCompact(record.copperDelta)}</p>
         <p className="text-xs text-zinc-500">
           {formatCompact(record.copperBefore)} to {formatCompact(record.copperAfter)}
@@ -276,6 +327,9 @@ function WarRecordRow({ record, alliance, onEdit, onDelete }: { record: WarRecor
       </Td>
       <Td>{formatNumber(record.observedAttendance)}%</Td>
       <Td>{record.observedActivity}/10</Td>
+      <Td>
+        <p className="max-w-[220px] truncate text-zinc-300">{record.battleSummary || "No summary"}</p>
+      </Td>
       <Td>
         <p className="max-w-[240px] truncate text-zinc-400">{record.notes || "No notes"}</p>
       </Td>
@@ -301,6 +355,7 @@ function TimelineItem({ record, alliance }: { record: WarRecord; alliance?: Alli
         <p className="font-semibold text-zinc-100">
           {alliance?.name ?? "Deleted alliance"} vs {record.enemyAllianceName}
         </p>
+        {record.battleSummary && <p className="mt-1 text-sm text-zinc-300">{record.battleSummary}</p>}
         <p className="mt-1 text-sm text-zinc-400">{record.notes || "No notes recorded."}</p>
       </div>
       <div className="flex items-center gap-2 sm:justify-end">
@@ -367,7 +422,9 @@ function stripRecordId(record: WarRecord): WarFormState {
     enemyAllianceName: record.enemyAllianceName,
     copperBefore: record.copperBefore,
     copperAfter: record.copperAfter,
+    plunderPercent: record.plunderPercent ?? 0,
     result: record.result,
+    battleSummary: record.battleSummary ?? "",
     observedAttendance: record.observedAttendance,
     observedActivity: record.observedActivity,
     notes: record.notes
@@ -381,4 +438,8 @@ function buildWarStats(records: WarRecord[]) {
     losses: records.filter((record) => record.result === "loss").length,
     netCopper: records.reduce((total, record) => total + record.copperDelta, 0)
   };
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
