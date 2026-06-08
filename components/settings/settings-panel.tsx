@@ -8,11 +8,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { isPlannerState } from "@/lib/storage";
 import { isSupabaseConfigured, loadPlannerSnapshot, pushPlannerSnapshot } from "@/lib/supabase-sync";
+import { importAllianceSpreadsheet } from "@/lib/spreadsheet-import";
 import { useWarPlannerStore } from "@/store/war-planner-store";
 import type { PlannerState } from "@/lib/types";
 
 export function SettingsPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const spreadsheetInputRef = useRef<HTMLInputElement | null>(null);
   const schemaVersion = useWarPlannerStore((store) => store.schemaVersion);
   const activeWorkspaceId = useWarPlannerStore((store) => store.activeWorkspaceId);
   const workspaces = useWarPlannerStore((store) => store.workspaces);
@@ -27,6 +29,7 @@ export function SettingsPanel() {
   const [error, setError] = useState("");
   const [syncKey, setSyncKey] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   function exportBackup() {
     setError("");
@@ -65,6 +68,63 @@ export function SettingsPanel() {
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
+  }
+
+  async function importSpreadsheet(file: File | undefined) {
+    setError("");
+    setMessage("");
+    if (!file) return;
+
+    try {
+      const currentState: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords };
+      const result = await importAllianceSpreadsheet(file, currentState);
+      replacePlannerState(result.plannerState);
+      setMessage(`Spreadsheet imported. Added ${result.serversAdded} servers and ${result.alliancesAdded} alliances. Skipped ${result.rowsSkipped} rows.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Spreadsheet import failed.");
+    } finally {
+      if (spreadsheetInputRef.current) spreadsheetInputRef.current.value = "";
+    }
+  }
+
+  function downloadSpreadsheetTemplate() {
+    setError("");
+    setMessage("");
+    const headers = [
+      "Server",
+      "Alliance Name",
+      "Status",
+      "Current Copper",
+      "Copper/hour",
+      "Top 30 Power",
+      "Avg Top 30 Power",
+      "Strongest Player Power",
+      "Activity",
+      "Wed Attendance",
+      "Sat Attendance",
+      "Threat Tier",
+      "Attendance Confidence",
+      "Activity Confidence",
+      "Notes"
+    ];
+    const example = ["1001", "UTW", "ally", "1200000", "50000", "900000000", "30000000", "65000000", "8", "75", "85", "A", "High", "High", "Example row"];
+    const csv = [headers, example].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "war-planner-alliance-import-template.csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setMessage("Spreadsheet template downloaded.");
+  }
+
+  async function copySpreadsheetPrompt() {
+    await navigator.clipboard.writeText(spreadsheetPrompt);
+    setCopiedPrompt(true);
+    window.setTimeout(() => setCopiedPrompt(false), 2000);
   }
 
   async function pushToSupabase() {
@@ -142,6 +202,34 @@ export function SettingsPanel() {
       </div>
 
       <Card className="p-4">
+        <h3 className="text-lg font-bold text-zinc-50">Spreadsheet Import</h3>
+        <p className="mt-2 text-sm text-zinc-400">
+          Upload a CSV or TSV file. Required column: Server. Optional alliance columns are imported when present.
+        </p>
+        <p className="mt-2 text-xs text-zinc-500">
+          Recommended headers: Server, Alliance Name, Status, Current Copper, Copper/hour, Top 30 Power, Activity, Wed Attendance, Sat Attendance, Threat Tier, Notes.
+        </p>
+        <input ref={spreadsheetInputRef} className="hidden" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={(event) => importSpreadsheet(event.target.files?.[0])} />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={downloadSpreadsheetTemplate}>
+            <Download className="size-4" />
+            Download Template
+          </Button>
+          <Button type="button" variant="secondary" onClick={copySpreadsheetPrompt}>
+            <FileJson className="size-4" />
+            {copiedPrompt ? "Copied Prompt" : "Copy ChatGPT Prompt"}
+          </Button>
+          <Button type="button" onClick={() => spreadsheetInputRef.current?.click()}>
+            <Upload className="size-4" />
+            Import Spreadsheet
+          </Button>
+        </div>
+        <pre className="mt-4 max-h-72 overflow-auto rounded-md border border-command-700 bg-command-950 p-3 text-xs leading-5 text-zinc-300">
+          {spreadsheetPrompt}
+        </pre>
+      </Card>
+
+      <Card className="p-4">
         <h3 className="text-lg font-bold text-zinc-50">Supabase Cloud Sync</h3>
         <p className="mt-2 text-sm text-zinc-400">
           Uses a shared sync key to save or load one planner snapshot from Supabase. This is not user authentication.
@@ -173,11 +261,12 @@ export function SettingsPanel() {
           After pushing cloud data, give someone the same sync key and send them to the shared view. They can view alliance intelligence but cannot edit it.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/shared">
-            <Button type="button" variant="secondary">
-              <Eye className="size-4" />
-              Open Shared View
-            </Button>
+          <Link
+            href="/shared"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-command-700 bg-command-800 px-3 text-sm font-semibold text-zinc-100 transition hover:bg-command-700"
+          >
+            <Eye className="size-4" />
+            Open Shared View
           </Link>
           {syncKey.trim().length >= 6 && (
             <p className="rounded-md border border-command-700 bg-command-900 px-3 py-2 text-sm text-zinc-300">
@@ -242,3 +331,32 @@ function Summary({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function csvCell(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+const spreadsheetPrompt = `You are helping me extract Last War alliance intelligence from screenshots.
+
+Read the screenshots carefully and output ONLY valid CSV text.
+
+Use this exact header row:
+Server,Alliance Name,Status,Current Copper,Copper/hour,Top 30 Power,Avg Top 30 Power,Strongest Player Power,Activity,Wed Attendance,Sat Attendance,Threat Tier,Attendance Confidence,Activity Confidence,Notes
+
+Rules:
+- One alliance per row.
+- Server must be a number.
+- Alliance Name should be the alliance tag/name shown.
+- Status must be one of: ally, enemy, neutral. If unknown, use neutral.
+- Current Copper, Copper/hour, Top 30 Power, Avg Top 30 Power, and Strongest Player Power must be plain numbers with no commas, letters, or symbols.
+- Activity must be a number from 1 to 10. If not shown, estimate from the screenshot and mention estimate in Notes.
+- Wed Attendance and Sat Attendance must be percentages from 0 to 100. If not shown, use 50 and mention unknown in Notes.
+- Threat Tier must be one of: S, A, B, C, D, Unknown. If not obvious, use Unknown.
+- Attendance Confidence and Activity Confidence must be one of: Low, Medium, High.
+- Notes should include anything uncertain, estimated, or useful.
+- If a value is abbreviated like 1.2M, convert it to 1200000. If it is 850K, convert it to 850000.
+- Do not add explanations before or after the CSV.
+
+Example output:
+Server,Alliance Name,Status,Current Copper,Copper/hour,Top 30 Power,Avg Top 30 Power,Strongest Player Power,Activity,Wed Attendance,Sat Attendance,Threat Tier,Attendance Confidence,Activity Confidence,Notes
+1001,UTW,ally,1200000,50000,900000000,30000000,65000000,8,75,85,A,High,High,Example row`;
