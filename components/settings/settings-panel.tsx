@@ -21,6 +21,7 @@ export function SettingsPanel() {
   const servers = useWarPlannerStore((store) => store.servers);
   const alliances = useWarPlannerStore((store) => store.alliances);
   const warRecords = useWarPlannerStore((store) => store.warRecords);
+  const factionBattleRecords = useWarPlannerStore((store) => store.factionBattleRecords);
   const replacePlannerState = useWarPlannerStore((store) => store.replacePlannerState);
   const setActiveWorkspace = useWarPlannerStore((store) => store.setActiveWorkspace);
   const updateWorkspace = useWarPlannerStore((store) => store.updateWorkspace);
@@ -34,7 +35,7 @@ export function SettingsPanel() {
   function exportBackup() {
     setError("");
     setMessage("");
-    const backup: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords };
+    const backup: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords, factionBattleRecords };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -76,7 +77,7 @@ export function SettingsPanel() {
     if (!file) return;
 
     try {
-      const currentState: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords };
+      const currentState: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords, factionBattleRecords };
       const result = await importAllianceSpreadsheet(file, currentState);
       replacePlannerState(result.plannerState);
       setMessage(`Spreadsheet imported. Added ${result.serversAdded} servers and ${result.alliancesAdded} alliances. Skipped ${result.rowsSkipped} rows.`);
@@ -133,7 +134,7 @@ export function SettingsPanel() {
     setIsSyncing(true);
 
     try {
-      const backup: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords };
+      const backup: PlannerState = { schemaVersion, activeWorkspaceId, workspaces, servers, alliances, warRecords, factionBattleRecords };
       const updatedAt = await pushPlannerSnapshot(syncKey, backup);
       setMessage(`Supabase snapshot saved. Updated ${new Date(updatedAt).toLocaleString()}.`);
     } catch (err) {
@@ -176,6 +177,7 @@ export function SettingsPanel() {
           <Summary label="Servers" value={servers.length.toString()} />
           <Summary label="Alliances" value={alliances.length.toString()} />
           <Summary label="War Records" value={warRecords.length.toString()} />
+          <Summary label="Faction Battles" value={factionBattleRecords.length.toString()} />
           <Summary label="Workspaces" value={workspaces.length.toString()} />
         </div>
       </Card>
