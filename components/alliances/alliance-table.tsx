@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { projectedCopper, formatCompact, threatWeight } from "@/lib/calculations";
+import { currentCopperNow, projectedCopper, formatCompact, threatWeight } from "@/lib/calculations";
 import { AllianceForm } from "@/components/alliances/alliance-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,7 @@ function AllianceRow({
   onQuickUpdate: (id: string, patch: Partial<Omit<Alliance, "id">>) => void;
 }) {
   const relationTone = alliance.relation === "ally" ? "green" : alliance.relation === "enemy" ? "red" : "neutral";
+  const liveCopper = currentCopperNow(alliance);
   const projectionText = `1h ${formatCompact(projectedCopper(alliance, 1))} | 6h ${formatCompact(projectedCopper(alliance, 6))} | 12h ${formatCompact(projectedCopper(alliance, 12))} | 24h ${formatCompact(projectedCopper(alliance, 24))}`;
 
   return (
@@ -114,6 +115,7 @@ function AllianceRow({
       </Td>
       <Td>
         <QuickNumber value={alliance.currentCopper} onChange={(value) => onQuickUpdate(alliance.id, { currentCopper: value })} />
+        <p className="mt-1 text-xs text-zinc-500">Live {formatCompact(liveCopper)}</p>
       </Td>
       <Td>
         <QuickNumber value={alliance.copperPerHour} onChange={(value) => onQuickUpdate(alliance.id, { copperPerHour: value })} />
@@ -198,6 +200,7 @@ function filterAndSortAlliances(alliances: Alliance[], filters: AllianceFilters)
     .sort((a, b) => {
       const direction = filters.sortDirection === "asc" ? 1 : -1;
       if (filters.sortKey === "threatTier") return (threatWeight(a.threatTier) - threatWeight(b.threatTier)) * direction;
+      if (filters.sortKey === "currentCopper") return (currentCopperNow(a) - currentCopperNow(b)) * direction;
       return ((a[filters.sortKey] as number) - (b[filters.sortKey] as number)) * direction;
     });
 }

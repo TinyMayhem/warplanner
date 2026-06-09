@@ -10,6 +10,7 @@ import {
   bestAttendance,
   calculateWinChance,
   copperAdvantage,
+  currentCopperNow,
   formatCompact,
   formatNumber,
   targetPriorityScore,
@@ -208,7 +209,7 @@ function TargetCard({ rank, alliance, priority, risk }: { rank: number; alliance
       </div>
       <Bar value={priority} max={100} />
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-400">
-        <span>{formatCompact(alliance.currentCopper)} copper</span>
+        <span>{formatCompact(currentCopperNow(alliance))} copper</span>
         <span>{formatCompact(alliance.copperPerHour)}/hr</span>
         <span>{formatNumber(bestAttendance(alliance))}% attend</span>
       </div>
@@ -277,7 +278,7 @@ function Bar({ value, max }: { value: number; max: number }) {
 function mergeOverrides(alliance: Alliance | undefined, overrides: Partial<OverrideState>) {
   if (!alliance) return undefined;
   return {
-    currentCopper: alliance.currentCopper,
+    currentCopper: currentCopperNow(alliance),
     copperPerHour: alliance.copperPerHour,
     topThirtyHeroPower: alliance.topThirtyHeroPower,
     attendanceWednesday: alliance.attendanceWednesday,

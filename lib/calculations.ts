@@ -1,7 +1,20 @@
 import type { Alliance, Server, ThreatTier } from "@/lib/types";
 
-export function projectedCopper(alliance: Pick<Alliance, "currentCopper" | "copperPerHour">, hours: number) {
-  return alliance.currentCopper + alliance.copperPerHour * hours;
+type CopperSnapshot = Pick<Alliance, "currentCopper" | "copperPerHour"> & Partial<Pick<Alliance, "lastUpdatedAt">>;
+
+export function currentCopperNow(alliance: CopperSnapshot) {
+  return projectedCopper(alliance, 0);
+}
+
+export function projectedCopper(alliance: CopperSnapshot, hours: number) {
+  return alliance.currentCopper + alliance.copperPerHour * (hoursSinceCopperUpdate(alliance) + hours);
+}
+
+export function hoursSinceCopperUpdate(alliance: Partial<Pick<Alliance, "lastUpdatedAt">>) {
+  if (!alliance.lastUpdatedAt) return 0;
+  const updatedAt = new Date(alliance.lastUpdatedAt).getTime();
+  if (!Number.isFinite(updatedAt)) return 0;
+  return Math.max(0, (Date.now() - updatedAt) / (1000 * 60 * 60));
 }
 
 export function average(values: number[]) {
@@ -41,8 +54,10 @@ export type WinChanceResult = {
 };
 
 export function calculateWinChance(ours: CalculatorAlliance, enemy: CalculatorAlliance): WinChanceResult {
+  const oursCopper = currentCopperNow(ours);
+  const enemyCopper = currentCopperNow(enemy);
   const scores = {
-    copper: matchupScore(ours.currentCopper, enemy.currentCopper),
+    copper: matchupScore(oursCopper, enemyCopper),
     power: matchupScore(ours.topThirtyHeroPower, enemy.topThirtyHeroPower),
     attendance: matchupScore(bestAttendance(ours), bestAttendance(enemy)),
     activity: matchupScore(ours.activityRating, enemy.activityRating)
@@ -59,8 +74,10 @@ export function calculateWinChance(ours: CalculatorAlliance, enemy: CalculatorAl
 }
 
 export function copperAdvantage(ours: CalculatorAlliance, enemy: CalculatorAlliance) {
-  const difference = ours.currentCopper - enemy.currentCopper;
-  const percentage = enemy.currentCopper <= 0 ? (ours.currentCopper > 0 ? 100 : 0) : (difference / enemy.currentCopper) * 100;
+  const oursCopper = currentCopperNow(ours);
+  const enemyCopper = currentCopperNow(enemy);
+  const difference = oursCopper - enemyCopper;
+  const percentage = enemyCopper <= 0 ? (oursCopper > 0 ? 100 : 0) : (difference / enemyCopper) * 100;
 
   return {
     difference,
@@ -84,7 +101,7 @@ export function copperForecast(alliance: Pick<Alliance, "currentCopper" | "coppe
 }
 
 export function targetPriorityScore(alliance: CalculatorAlliance) {
-  const value = normalize(alliance.currentCopper, 10_000_000) * 34 + normalize(alliance.copperPerHour, 500_000) * 22;
+  const value = normalize(currentCopperNow(alliance), 10_000_000) * 34 + normalize(alliance.copperPerHour, 500_000) * 22;
   const resistance =
     normalize(alliance.topThirtyHeroPower, 1_000_000_000) * 18 +
     normalize(bestAttendance(alliance), 100) * 14 +
@@ -113,16 +130,16 @@ export function bestAttendance(alliance: Pick<Alliance, "attendanceWednesday" | 
 
 export function getServerStats(server: Server, alliances: Alliance[]) {
   const serverAlliances = alliances.filter((alliance) => alliance.serverId === server.id);
-  const totalCopper = serverAlliances.reduce((total, alliance) => total + alliance.currentCopper, 0);
+  const totalCopper = serverAlliances.reduce((total, alliance) => total + currentCopperNow(alliance), 0);
   const totalPower = serverAlliances.reduce((total, alliance) => total + alliance.topThirtyHeroPower, 0);
   const topThreats = [...serverAlliances]
-    .sort((a, b) => threatWeight(b.threatTier) - threatWeight(a.threatTier) || b.currentCopper - a.currentCopper)
+    .sort((a, b) => threatWeight(b.threatTier) - threatWeight(a.threatTier) || currentCopperNow(b) - currentCopperNow(a))
     .slice(0, 3);
 
   return {
     allianceCount: serverAlliances.length,
     totalCopper,
-    averageCopper: average(serverAlliances.map((alliance) => alliance.currentCopper)),
+    averageCopper: average(serverAlliances.map((alliance) => currentCopperNow(alliance))),
     averagePower: serverAlliances.length ? totalPower / serverAlliances.length : 0,
     topThreats
   };

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { calculateWinChance, copperForecast, formatCompact, formatNumber, projectedCopper } from "@/lib/calculations";
+import { calculateWinChance, copperForecast, currentCopperNow, formatCompact, formatNumber, projectedCopper } from "@/lib/calculations";
 import { useWarPlannerStore } from "@/store/war-planner-store";
 import type { Alliance } from "@/lib/types";
 
@@ -81,7 +81,7 @@ export function Forecasting() {
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="p-4">
-          <SectionTitle icon={Clock} title={`${primary.name} Forecast`} subtitle={`Current ${formatCompact(primary.currentCopper)} | ${formatCompact(primary.copperPerHour)}/hr`} />
+          <SectionTitle icon={Clock} title={`${primary.name} Forecast`} subtitle={`Current ${formatCompact(currentCopperNow(primary))} | ${formatCompact(primary.copperPerHour)}/hr`} />
           <div className="space-y-3">
             {copperForecast(primary, FORECAST_HOURS).map((point) => (
               <ForecastRow key={point.hour} hour={point.hour} copper={point.copper} gained={point.gained} max={projectedCopper(primary, 72)} />
@@ -289,7 +289,7 @@ function LeaderRow({ rank, alliance, max, hours }: { rank: number; alliance: All
             {rank}. {alliance.name}
           </p>
           <p className="text-xs text-zinc-500">
-            Current {formatCompact(alliance.currentCopper)} | {formatCompact(alliance.copperPerHour)}/hr
+            Current {formatCompact(currentCopperNow(alliance))} | {formatCompact(alliance.copperPerHour)}/hr
           </p>
         </div>
         <Badge tone={alliance.relation === "enemy" ? "red" : alliance.relation === "ally" ? "green" : "neutral"}>{alliance.relation}</Badge>

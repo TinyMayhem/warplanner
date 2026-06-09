@@ -3,9 +3,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { createId } from "@/lib/ids";
-import { threatWeight } from "@/lib/calculations";
+import { currentCopperNow, threatWeight } from "@/lib/calculations";
 import { createPlannerPersistStorage, STORAGE_KEY } from "@/lib/storage";
-import type { Alliance, AllianceFilters, PlannerState, Server, WarRecord, Workspace, WorkspaceRole } from "@/lib/types";
+import type { Alliance, AllianceFilters, FactionBattleRecord, PlannerState, Server, WarRecord, Workspace, WorkspaceRole } from "@/lib/types";
 
 type StoreActions = {
   setActiveWorkspace: (id: string) => void;
@@ -22,6 +22,9 @@ type StoreActions = {
   addWarRecord: (record: Omit<WarRecord, "id" | "copperDelta" | "workspaceId">) => void;
   updateWarRecord: (id: string, patch: Partial<Omit<WarRecord, "id">>) => void;
   deleteWarRecord: (id: string) => void;
+  addFactionBattleRecord: (record: Omit<FactionBattleRecord, "id" | "workspaceId" | "createdAt" | "updatedAt">) => void;
+  updateFactionBattleRecord: (id: string, patch: Partial<Omit<FactionBattleRecord, "id" | "workspaceId" | "createdAt">>) => void;
+  deleteFactionBattleRecord: (id: string) => void;
   replacePlannerState: (state: PlannerState) => void;
   filteredAlliances: () => Alliance[];
 };
@@ -55,7 +58,8 @@ const initialState: PlannerState = {
   workspaces: [defaultWorkspace],
   servers: initialServers,
   alliances: [],
-  warRecords: []
+  warRecords: [],
+  factionBattleRecords: []
 };
 
 const defaultFilters: AllianceFilters = {
@@ -123,6 +127,7 @@ export const useWarPlannerStore = create<WarPlannerStore>()(
             servers: state.servers.filter((server) => server.workspaceId !== id),
             alliances: state.alliances.filter((alliance) => alliance.workspaceId !== id),
             warRecords: state.warRecords.filter((record) => record.workspaceId !== id),
+            factionBattleRecords: state.factionBattleRecords.filter((record) => record.workspaceId !== id),
             filters: defaultFilters
           };
         });
@@ -192,7 +197,8 @@ export const useWarPlannerStore = create<WarPlannerStore>()(
       deleteAlliance(id) {
         set((state) => ({
           alliances: state.alliances.filter((alliance) => alliance.id !== id),
-          warRecords: state.warRecords.filter((record) => record.allianceId !== id)
+          warRecords: state.warRecords.filter((record) => record.allianceId !== id),
+          factionBattleRecords: state.factionBattleRecords.filter((record) => record.factionAAllianceId !== id && record.factionBAllianceId !== id)
         }));
       },
       addWarRecord(record) {
@@ -222,6 +228,39 @@ export const useWarPlannerStore = create<WarPlannerStore>()(
           warRecords: state.warRecords.filter((record) => record.id !== id)
         }));
       },
+      addFactionBattleRecord(record) {
+        const timestamp = now();
+        set((state) => ({
+          factionBattleRecords: [
+            ...state.factionBattleRecords,
+            {
+              ...record,
+              id: createId("faction"),
+              workspaceId: state.activeWorkspaceId,
+              createdAt: timestamp,
+              updatedAt: timestamp
+            }
+          ]
+        }));
+      },
+      updateFactionBattleRecord(id, patch) {
+        set((state) => ({
+          factionBattleRecords: state.factionBattleRecords.map((record) =>
+            record.id === id
+              ? {
+                  ...record,
+                  ...patch,
+                  updatedAt: now()
+                }
+              : record
+          )
+        }));
+      },
+      deleteFactionBattleRecord(id) {
+        set((state) => ({
+          factionBattleRecords: state.factionBattleRecords.filter((record) => record.id !== id)
+        }));
+      },
       replacePlannerState(nextState) {
         set(() => ({
           ...normalizePlannerState(nextState),
@@ -244,6 +283,7 @@ export const useWarPlannerStore = create<WarPlannerStore>()(
           .sort((a, b) => {
             const direction = filters.sortDirection === "asc" ? 1 : -1;
             if (filters.sortKey === "threatTier") return (threatWeight(a.threatTier) - threatWeight(b.threatTier)) * direction;
+            if (filters.sortKey === "currentCopper") return (currentCopperNow(a) - currentCopperNow(b)) * direction;
             return ((a[filters.sortKey] as number) - (b[filters.sortKey] as number)) * direction;
           });
       }
@@ -261,7 +301,8 @@ export const useWarPlannerStore = create<WarPlannerStore>()(
         workspaces: state.workspaces,
         servers: state.servers,
         alliances: state.alliances,
-        warRecords: state.warRecords
+        warRecords: state.warRecords,
+        factionBattleRecords: state.factionBattleRecords
       })
     }
   )
@@ -294,7 +335,18 @@ function normalizePlannerState(value: unknown): PlannerState {
     })),
     warRecords: (state?.warRecords ?? []).map((record) => ({
       ...record,
-      workspaceId: record.workspaceId ?? fallbackWorkspaceId
+      workspaceId: record.workspaceId ?? fallbackWorkspaceId,
+      plunderPercent: record.plunderPercent ?? 0,
+      battleSummary: record.battleSummary ?? ""
+    })),
+    factionBattleRecords: (state?.factionBattleRecords ?? []).map((record) => ({
+      ...record,
+      workspaceId: record.workspaceId ?? fallbackWorkspaceId,
+      difficulty: record.difficulty ?? "Medium",
+      battleSummary: record.battleSummary ?? "",
+      notes: record.notes ?? "",
+      createdAt: record.createdAt ?? now(),
+      updatedAt: record.updatedAt ?? now()
     }))
   };
 }

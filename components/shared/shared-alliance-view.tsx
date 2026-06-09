@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { formatCompact, projectedCopper } from "@/lib/calculations";
+import { currentCopperNow, formatCompact, projectedCopper } from "@/lib/calculations";
 import { isSupabaseConfigured, loadPlannerSnapshot } from "@/lib/supabase-sync";
 import type { Alliance, PlannerState } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export function SharedAllianceView() {
       (plannerState?.alliances ?? [])
         .filter((alliance) => alliance.workspaceId === activeWorkspaceId)
         .filter((alliance) => !search.trim() || alliance.name.toLowerCase().includes(search.trim().toLowerCase()))
-        .sort((a, b) => b.currentCopper - a.currentCopper),
+        .sort((a, b) => currentCopperNow(b) - currentCopperNow(a)),
     [activeWorkspaceId, plannerState?.alliances, search]
   );
   const servers = useMemo(() => (plannerState?.servers ?? []).filter((server) => server.workspaceId === activeWorkspaceId), [activeWorkspaceId, plannerState?.servers]);
@@ -103,7 +103,7 @@ export function SharedAllianceView() {
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Metric label="Servers" value={servers.length.toString()} />
               <Metric label="Alliances" value={alliances.length.toString()} />
-              <Metric label="Total Copper" value={formatCompact(alliances.reduce((total, alliance) => total + alliance.currentCopper, 0))} />
+              <Metric label="Total Copper" value={formatCompact(alliances.reduce((total, alliance) => total + currentCopperNow(alliance), 0))} />
               <Metric label="Total Power" value={formatCompact(alliances.reduce((total, alliance) => total + alliance.topThirtyHeroPower, 0))} />
             </div>
 
@@ -157,7 +157,7 @@ function SharedAllianceRow({ alliance }: { alliance: Alliance }) {
         <Badge tone={alliance.relation === "enemy" ? "red" : alliance.relation === "ally" ? "green" : "neutral"}>{alliance.relation}</Badge>
       </Td>
       <Td>Threat {alliance.threatTier}</Td>
-      <Td>{formatCompact(alliance.currentCopper)}</Td>
+      <Td>{formatCompact(currentCopperNow(alliance))}</Td>
       <Td>{formatCompact(alliance.copperPerHour)}/hr</Td>
       <Td>{formatCompact(projectedCopper(alliance, 24))}</Td>
       <Td>

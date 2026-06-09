@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { Activity, Crosshair, Gauge, RadioTower, ShieldAlert, Swords, TrendingUp, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { average, formatCompact, projectedCopper, threatWeight } from "@/lib/calculations";
+import { average, currentCopperNow, formatCompact, projectedCopper, threatWeight } from "@/lib/calculations";
 import { useWarPlannerStore } from "@/store/war-planner-store";
 import type { Alliance } from "@/lib/types";
 
@@ -32,7 +32,7 @@ export function Dashboard() {
             <Badge tone="red">{dashboard.mostDangerous.length} active</Badge>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
-            <RankedPanel title="Top Copper Threats" alliances={dashboard.topCopperThreats} metric={(alliance) => formatCompact(alliance.currentCopper)} max={dashboard.maxCopper} value={(alliance) => alliance.currentCopper} />
+            <RankedPanel title="Top Copper Threats" alliances={dashboard.topCopperThreats} metric={(alliance) => formatCompact(currentCopperNow(alliance))} max={dashboard.maxCopper} value={(alliance) => currentCopperNow(alliance)} />
             <RankedPanel title="Top Power Threats" alliances={dashboard.topPowerThreats} metric={(alliance) => formatCompact(alliance.topThirtyHeroPower)} max={dashboard.maxPower} value={(alliance) => alliance.topThirtyHeroPower} />
             <RankedPanel title="Fastest Growing Alliances" alliances={dashboard.fastestGrowing} metric={(alliance) => `${formatCompact(alliance.copperPerHour)}/hr`} max={dashboard.maxCopperPerHour} value={(alliance) => alliance.copperPerHour} />
             <RankedPanel title="Most Dangerous Alliances" alliances={dashboard.mostDangerous} metric={(alliance) => `Score ${Math.round(dangerScore(alliance))}`} max={dashboard.maxDangerScore} value={dangerScore} />
@@ -120,7 +120,7 @@ function OverviewGrid({
   const cards = [
     { label: "Alliances", value: alliances.length.toString(), detail: `${serverCount} servers`, icon: Users },
     { label: "Total Copper", value: formatCompact(dashboard.totalCopper), detail: `${formatCompact(dashboard.averageCopper)} avg`, icon: RadioTower },
-    { label: "Highest Copper", value: dashboard.highestCopper?.name ?? "None", detail: dashboard.highestCopper ? formatCompact(dashboard.highestCopper.currentCopper) : "No data", icon: ShieldAlert },
+    { label: "Highest Copper", value: dashboard.highestCopper?.name ?? "None", detail: dashboard.highestCopper ? formatCompact(currentCopperNow(dashboard.highestCopper)) : "No data", icon: ShieldAlert },
     { label: "Fastest Growth", value: dashboard.highestCopperPerHour?.name ?? "None", detail: dashboard.highestCopperPerHour ? `${formatCompact(dashboard.highestCopperPerHour.copperPerHour)}/hr` : "No data", icon: TrendingUp },
     { label: "Highest Power", value: dashboard.highestPower?.name ?? "None", detail: dashboard.highestPower ? formatCompact(dashboard.highestPower.topThirtyHeroPower) : "No data", icon: Swords },
     { label: "Best Attendance", value: dashboard.highestAttendance?.name ?? "None", detail: dashboard.highestAttendance ? `${dashboard.highestAttendance.attendanceSaturday}% Saturday` : "No data", icon: Gauge },
@@ -202,7 +202,7 @@ function TargetRow({ alliance, rank, max }: { alliance: Alliance; rank: number; 
       </div>
       <Bar value={score} max={max} />
       <div className="mt-2 flex justify-between text-xs text-zinc-400">
-        <span>{formatCompact(alliance.currentCopper)} copper</span>
+        <span>{formatCompact(currentCopperNow(alliance))} copper</span>
         <span>Priority {Math.round(score)}</span>
       </div>
     </div>
@@ -211,15 +211,16 @@ function TargetRow({ alliance, rank, max }: { alliance: Alliance; rank: number; 
 
 function ForecastRow({ alliance, max }: { alliance: Alliance; max: number }) {
   const projected = projectedCopper(alliance, 24);
+  const current = currentCopperNow(alliance);
 
   return (
     <div className="rounded-md border border-command-700 bg-command-900 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-semibold text-zinc-100">{alliance.name}</p>
-          <p className="text-xs text-zinc-500">Now {formatCompact(alliance.currentCopper)} | 24h {formatCompact(projected)}</p>
+          <p className="text-xs text-zinc-500">Now {formatCompact(current)} | 24h {formatCompact(projected)}</p>
         </div>
-        <Badge tone="copper">+{formatCompact(projected - alliance.currentCopper)}</Badge>
+        <Badge tone="copper">+{formatCompact(projected - current)}</Badge>
       </div>
       <Bar value={projected} max={max} />
     </div>
@@ -240,7 +241,7 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function buildDashboard(alliances: Alliance[]) {
-  const byCopper = rankBy(alliances, (alliance) => alliance.currentCopper);
+  const byCopper = rankBy(alliances, (alliance) => currentCopperNow(alliance));
   const byGrowth = rankBy(alliances, (alliance) => alliance.copperPerHour);
   const byPower = rankBy(alliances, (alliance) => alliance.topThirtyHeroPower);
   const byAttendance = rankBy(alliances, (alliance) => Math.max(alliance.attendanceWednesday, alliance.attendanceSaturday));
@@ -255,9 +256,9 @@ function buildDashboard(alliances: Alliance[]) {
   const enemyAlliances = alliances.filter((alliance) => alliance.relation === "enemy");
 
   return {
-    totalCopper: alliances.reduce((total, alliance) => total + alliance.currentCopper, 0),
-    averageCopper: average(alliances.map((alliance) => alliance.currentCopper)),
-    enemyCopper: enemyAlliances.reduce((total, alliance) => total + alliance.currentCopper, 0),
+    totalCopper: alliances.reduce((total, alliance) => total + currentCopperNow(alliance), 0),
+    averageCopper: average(alliances.map((alliance) => currentCopperNow(alliance))),
+    enemyCopper: enemyAlliances.reduce((total, alliance) => total + currentCopperNow(alliance), 0),
     enemyCount: enemyAlliances.length,
     highestCopper: byCopper[0],
     highestCopperPerHour: byGrowth[0],
@@ -271,7 +272,7 @@ function buildDashboard(alliances: Alliance[]) {
     bestTargets: bestTargets.slice(0, 6),
     forecastLeaders: forecastLeaders.slice(0, 6),
     recentIntel,
-    maxCopper: Math.max(0, ...alliances.map((alliance) => alliance.currentCopper)),
+    maxCopper: Math.max(0, ...alliances.map((alliance) => currentCopperNow(alliance))),
     maxCopperPerHour: Math.max(0, ...alliances.map((alliance) => alliance.copperPerHour)),
     maxPower: Math.max(0, ...alliances.map((alliance) => alliance.topThirtyHeroPower)),
     maxDangerScore: Math.max(0, ...alliances.map(dangerScore)),
@@ -286,7 +287,7 @@ function rankBy(alliances: Alliance[], score: (alliance: Alliance) => number) {
 
 function dangerScore(alliance: Alliance) {
   return (
-    normalize(alliance.currentCopper, 10_000_000) * 25 +
+    normalize(currentCopperNow(alliance), 10_000_000) * 25 +
     normalize(alliance.copperPerHour, 500_000) * 20 +
     normalize(alliance.topThirtyHeroPower, 1_000_000_000) * 22 +
     normalize(Math.max(alliance.attendanceWednesday, alliance.attendanceSaturday), 100) * 15 +
@@ -296,7 +297,7 @@ function dangerScore(alliance: Alliance) {
 }
 
 function opportunityScore(alliance: Alliance) {
-  const value = normalize(alliance.currentCopper, 10_000_000) * 34 + normalize(alliance.copperPerHour, 500_000) * 22;
+  const value = normalize(currentCopperNow(alliance), 10_000_000) * 34 + normalize(alliance.copperPerHour, 500_000) * 22;
   const resistance = normalize(alliance.topThirtyHeroPower, 1_000_000_000) * 18 + normalize(Math.max(alliance.attendanceWednesday, alliance.attendanceSaturday), 100) * 14 + normalize(alliance.activityRating, 10) * 12;
   const relationBonus = alliance.relation === "enemy" ? 12 : 4;
   return Math.max(0, value - resistance + relationBonus);

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart3, Calculator, Database, History, Plus, Radar, Settings, Shield, TrendingUp } from "lucide-react";
+import { BarChart3, Calculator, Database, History, Plus, Radar, Settings, Shield, Swords, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -14,6 +14,7 @@ const navItems = [
   { label: "Alliances", href: "/alliances", icon: Shield },
   { label: "Calculators", href: "/calculators", icon: Calculator },
   { label: "War History", href: "/war-history", icon: History },
+  { label: "Faction History", href: "/faction-history", icon: Swords },
   { label: "Forecasting", href: "/forecasting", icon: TrendingUp },
   { label: "Settings", href: "/settings", icon: Settings }
 ];
